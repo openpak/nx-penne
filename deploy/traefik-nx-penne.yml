@@ -1,0 +1,29 @@
+# Traefik dynamic.yml snippet for nx-penne -- not applied anywhere. Merge the router and the
+# service into ~/openpak/deploy/traefik/dynamic.yml (tcp: section); the file provider
+# reloads it without a restart. TLS stays passthrough: nx-penne terminates with OpenPak-CA
+# certificates exactly as nx-baas did.
+#
+# The frontline (fro-3) MUST be listed: it is a full-duplex stream nx-baas cannot forward,
+# and once Penne has moved nx-baas answers it 421. god and val would still work through
+# nx-baas's forward; listing them takes nx-baas out of their path.
+#
+# Not listed on purpose: gw.hac.lp1.vermillion.srv.nintendo.net, the online-licence gate,
+# which stays on nx-baas.
+tcp:
+  routers:
+    nx-penne:
+      entryPoints: [console]
+      rule: >-
+        HostSNI(`fro-3.hac.lp1.penne.srv.nintendo.net`) ||
+        HostSNI(`god.hac.lp1.penne.srv.nintendo.net`) ||
+        HostSNI(`val.hac.lp1.penne.srv.nintendo.net`) ||
+        HostSNI(`val.hac.penne.srv.nintendo.net`)
+      priority: 100
+      service: nx-penne
+      tls:
+        passthrough: true
+  services:
+    nx-penne:
+      loadBalancer:
+        servers:
+          - address: "openpak-nx-penne:21000"

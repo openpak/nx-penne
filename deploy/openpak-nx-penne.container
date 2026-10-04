@@ -1,0 +1,39 @@
+# Sample quadlet for nx-penne -- not applied anywhere. Copy to
+# ~/.config/containers/systemd/openpak-nx-penne.container on the box and fill in the
+# <...> paths from openpak-nx-baas.container (nx-baas docs/service-split.md, "Penne
+# cut-over"). Keys go INSIDE [Container]: appended at the end of the file they land in
+# [Install] and are silently ignored.
+[Unit]
+Description=OpenPak nx-penne (Switch push channel, split from nx-baas)
+# Ordering only. No Requires= on nx-baas: the whole point is that consoles keep their
+# connections while the core restarts.
+After=openpak-nx-baas.service
+
+[Container]
+ContainerName=openpak-nx-penne
+Image=ghcr.io/openpak/nx-penne:latest
+AutoUpdate=registry
+Network=openpak
+# The shared env file carries NX_INTERNAL_KEY; nothing secret goes here.
+EnvironmentFile=%h/openpak/deploy/.env
+Environment=NX_CORE_URL=http://openpak-nx-baas:20070
+Environment=NX_ADDR=:21000
+Environment=NX_API_ADDR=:20070
+Environment=NX_DATA=/app/data
+Environment=NX_CA_DIR=/ca
+Environment=BAAS_SIGNING_KEY=/keys/baas_signing_key.pem
+# First start only: with no /app/data/penne.json yet, nx-baas's file is imported as it
+# stood (registrations, tickets, outbox). Read-only, and only read then; drop the mount
+# once nx-penne has its own file. The directory, not the file: nx-baas saves by rename, and
+# a bind mount of a single file keeps showing the inode it was created with.
+Environment=NX_PENNE_IMPORT=/import/penne.json
+Volume=openpak-nx-penne-data:/app/data
+Volume=<nx-baas data dir on the host>:/import:ro
+Volume=%h/openpak/deploy/ca:/ca:ro
+Volume=<the host dir nx-baas mounts at /keys>:/keys:ro
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target
