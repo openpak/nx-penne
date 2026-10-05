@@ -15,17 +15,21 @@ import (
 	"time"
 
 	"github.com/openpak/nx-common/internalkey"
+	"github.com/openpak/nx-common/nxhttp"
 
 	"nx-penne/internal/penne"
 )
 
-// internalAPI is the plain-HTTP listener: the penne API, a health check, and the console
-// routes again for the god/val requests nx-baas forwards with the console's Host kept.
+// internalAPI is the plain-HTTP listener: the god/val requests nx-baas forwards with the
+// console's Host kept, and -- for every other Host -- the penne API and a health check. A
+// console host never reaches the penne API (nxhttp.SplitListener).
 func (s *server) internalAPI() http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("/internal/penne/", internalkey.Guard(http.HandlerFunc(s.penneAPI)))
-	mux.Handle("/", s)
-	return mux
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, map[string]any{"status": "ok", "service": "nx-penne"})
+	})
+	return nxhttp.SplitListener(s, mux)
 }
 
 func (s *server) penneAPI(w http.ResponseWriter, r *http.Request) {

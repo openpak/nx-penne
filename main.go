@@ -19,6 +19,8 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/rsa"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"io"
 	"log"
@@ -27,6 +29,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/openpak/nx-common/nxapi"
 	"github.com/openpak/nx-common/nxhttp"
@@ -92,21 +95,42 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.penne(w, r, body)
 }
 
-// loadPenneState opens $NX_DATA/penne.json. A first start with none, and NX_PENNE_IMPORT
-// naming nx-baas's file, takes nx-baas's state as it stood: registrations, tickets and
-// the outbox survive the move, so consoles reconnect with the credentials they hold.
+// loadPenneState opens $NX_DATA/penne.json. With NX_PENNE_IMPORT naming nx-baas's file, a
+// start takes nx-baas's state as it stands whenever that file is not the one already
+// imported: on the first cut-over, and again on a second cut-over after a rollback, when
+// nx-baas served Penne for a while and its file moved on. The fingerprint of the imported
+// file is kept beside ours (penne.json.imported); nx-baas does not write its file while
+// Penne is here, so every other start keeps our own state. A local file an import replaces
+// is kept as penne.json.before-import-<time>.
 func loadPenneState(path, importFrom string) *penneStore {
-	if _, err := os.Stat(path); err != nil && importFrom != "" {
-		if b, err := os.ReadFile(importFrom); err == nil {
-			if err := os.WriteFile(path+".tmp", b, 0o600); err == nil && os.Rename(path+".tmp", path) == nil {
-				log.Printf("%s imported %s (%d bytes) as %s", logPrefix, importFrom, len(b), path)
-			} else {
-				log.Fatalf("%s import %s: cannot write %s", logPrefix, importFrom, path)
-			}
-		} else {
-			log.Printf("%s NX_PENNE_IMPORT %s: %v; starting empty", logPrefix, importFrom, err)
-		}
+	if importFrom == "" {
+		return newPenneStore(path)
 	}
+	b, err := os.ReadFile(importFrom)
+	if err != nil {
+		log.Printf("%s NX_PENNE_IMPORT %s: %v; keeping our own state", logPrefix, importFrom, err)
+		return newPenneStore(path)
+	}
+	sum := sha256.Sum256(b)
+	mark := hex.EncodeToString(sum[:])
+	prev, _ := os.ReadFile(path + ".imported")
+	if _, err := os.Stat(path); err == nil && string(prev) == mark {
+		return newPenneStore(path)
+	}
+	if _, err := os.Stat(path); err == nil {
+		old := path + ".before-import-" + time.Now().UTC().Format("20060102T150405")
+		if err := os.Rename(path, old); err != nil {
+			log.Fatalf("%s import: cannot set our own state aside: %v", logPrefix, err)
+		}
+		log.Printf("%s %s changed since our last import (nx-baas served Penne meanwhile); our state is kept as %s", logPrefix, importFrom, old)
+	}
+	if err := os.WriteFile(path+".tmp", b, 0o600); err != nil || os.Rename(path+".tmp", path) != nil {
+		log.Fatalf("%s import %s: cannot write %s", logPrefix, importFrom, path)
+	}
+	if err := os.WriteFile(path+".imported", []byte(mark), 0o600); err != nil {
+		log.Fatalf("%s import: cannot record the fingerprint: %v", logPrefix, err)
+	}
+	log.Printf("%s imported %s (%d bytes) as %s", logPrefix, importFrom, len(b), path)
 	return newPenneStore(path)
 }
 
