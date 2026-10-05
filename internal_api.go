@@ -34,6 +34,20 @@ func (s *server) internalAPI() http.Handler {
 
 func (s *server) penneAPI(w http.ResponseWriter, r *http.Request) {
 	p := strings.TrimPrefix(r.URL.Path, "/internal/penne")
+	if cert, ok := strings.CutPrefix(p, "/console-registrations/"); ok && r.Method == http.MethodGet && cert != "" && !strings.Contains(cert, "/") {
+		// The registration of the console a device certificate names (nx-shop's licence checks).
+		ps := s.notifStore()
+		id := ps.ConsoleAssoc(cert)
+		out := map[string]any{"penne_id": id, "live": false, "user_id": "", "users": []string{}}
+		if a := ps.AssocIfLive(id); id != "" && a != nil {
+			out["live"], out["user_id"] = true, a.UserID
+			if users := ps.UsersOn(id); users != nil {
+				out["users"] = users
+			}
+		}
+		writeJSON(w, 200, out)
+		return
+	}
 	if id, ok := strings.CutPrefix(p, "/registrations/"); ok && r.Method == http.MethodGet && id != "" && !strings.Contains(id, "/") {
 		ps := s.notifStore()
 		out := map[string]any{"penne_id": id, "live": false, "user_id": "", "users": []string{}}

@@ -434,6 +434,20 @@ func (s *penneStore) BindConsole(certID, userID string) {
 	}
 }
 
+// ConsoleAssoc is the penne id of the console a device certificate names: registrations
+// are keyed by the user they were made for, which is the certificate itself until a profile
+// binds it, then the BAAS user it resolved to.
+func (s *penneStore) ConsoleAssoc(cert string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, k := range []string{cert, s.d.ConsoleUsers[cert]} {
+		if id := s.d.ByUser[k]; k != "" && id != "" {
+			return id
+		}
+	}
+	return s.d.ByDevice[cert]
+}
+
 // ResolveUser maps a device certificate onto the account signed in on it, and
 // leaves a real account id alone.
 func (s *penneStore) ResolveUser(id string) string {
