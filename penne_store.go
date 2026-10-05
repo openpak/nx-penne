@@ -169,7 +169,7 @@ func newPenneStore(path string) *penneStore {
 	}
 	if b, err := os.ReadFile(path); err == nil {
 		if err := json.Unmarshal(b, s.d); err != nil {
-			log.Printf("[nx-baas] penne store %s unreadable (%v); starting empty", path, err)
+			log.Printf("[nx-penne] penne store %s unreadable (%v); starting empty", path, err)
 			return s
 		}
 		// Records predating a schema change can lack the maps.
@@ -219,16 +219,16 @@ func (s *penneStore) saveLocked() {
 	}
 	b, err := json.Marshal(s.d)
 	if err != nil {
-		log.Printf("[nx-baas] penne store: marshal: %v", err)
+		log.Printf("[nx-penne] penne store: marshal: %v", err)
 		return
 	}
 	tmp := s.path + ".tmp"
 	if err := os.WriteFile(tmp, b, 0o600); err != nil {
-		log.Printf("[nx-baas] penne store: write: %v", err)
+		log.Printf("[nx-penne] penne store: write: %v", err)
 		return
 	}
 	if err := os.Rename(tmp, s.path); err != nil {
-		log.Printf("[nx-baas] penne store: rename: %v", err)
+		log.Printf("[nx-penne] penne store: rename: %v", err)
 	}
 }
 

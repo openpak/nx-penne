@@ -58,7 +58,7 @@ func (s *server) penneNotePresence(p penne.Table) bool {
 	s.reportPresence(presenceJob{p: nxapi.Presence{
 		UserID: userID, Device: device, State: state, AppID: appID, AppField: appField, GroupID: groupID, ACDIndex: acdIndex,
 	}})
-	log.Printf("[nx-baas] penne: presence user=%s device=%s byte=%d %s app=%s field=%q", userID, device, stateByte, state, appID, appField)
+	log.Printf("[nx-penne] penne: presence user=%s device=%s byte=%d %s app=%s field=%q", userID, device, stateByte, state, appID, appField)
 	return true
 }
 
