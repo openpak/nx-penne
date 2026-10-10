@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/hex"
 	"errors"
 	"io"
@@ -32,9 +33,10 @@ import (
 	"time"
 
 	"github.com/openpak/nx-common/nxapi"
-	"github.com/openpak/nx-common/nxhttp"
 	"github.com/openpak/nx-common/nxjwt"
 	"github.com/openpak/nx-common/nxtls"
+
+	"nx-penne/redact"
 )
 
 type server struct {
@@ -69,13 +71,13 @@ var debug = os.Getenv("NX_DEBUG") != ""
 // ServeHTTP answers Penne's hosts; any other host is misrouted and says so with a 421.
 func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	host := hostOf(r)
-	log.Printf("%s %s %s%s ua=%q", logPrefix, r.Method, host, r.URL.RequestURI(), r.UserAgent())
+	log.Printf("%s %s %s%s ua=%q", logPrefix, r.Method, host, redact.URL(r.URL), redact.IDs(r.UserAgent()))
 	if r.URL.Path == "/healthz" {
 		writeJSON(w, 200, map[string]any{"status": "ok", "service": "nx-penne"})
 		return
 	}
 	if !strings.Contains(host, "penne.") {
-		nxhttp.Misrouted(logPrefix, w, r)
+		misrouted(w, r)
 		return
 	}
 	// The frontline POST is bidirectional -- the request body carries the client's frames,
@@ -89,6 +91,10 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		rec := &recorder{ResponseWriter: w, status: 200}
 		w = rec
 		defer func() {
+			if !redact.Bodies {
+				log.Printf("%s DBG <<< %d %s %s%s body(%d)", logPrefix, rec.status, r.Method, host, redact.Path(r.URL.Path), rec.buf.Len())
+				return
+			}
 			log.Printf("%s DBG <<< %d %s %s%s body(%d)=%s", logPrefix, rec.status, r.Method, host, r.URL.Path, rec.buf.Len(), rec.buf.Bytes())
 		}()
 	}
@@ -108,7 +114,7 @@ func loadPenneState(path, importFrom string) *penneStore {
 	}
 	b, err := os.ReadFile(importFrom)
 	if err != nil {
-		log.Printf("%s NX_PENNE_IMPORT %s: %v; keeping our own state", logPrefix, importFrom, err)
+		log.Printf("%s NX_PENNE_IMPORT %s: %v; keeping our own state", logPrefix, importFrom, redact.Err(err))
 		return newPenneStore(path)
 	}
 	sum := sha256.Sum256(b)
@@ -120,7 +126,7 @@ func loadPenneState(path, importFrom string) *penneStore {
 	if _, err := os.Stat(path); err == nil {
 		old := path + ".before-import-" + time.Now().UTC().Format("20060102T150405")
 		if err := os.Rename(path, old); err != nil {
-			log.Fatalf("%s import: cannot set our own state aside: %v", logPrefix, err)
+			log.Fatalf("%s import: cannot set our own state aside: %v", logPrefix, redact.Err(err))
 		}
 		log.Printf("%s %s changed since our last import (nx-baas served Penne meanwhile); our state is kept as %s", logPrefix, importFrom, old)
 	}
@@ -128,7 +134,7 @@ func loadPenneState(path, importFrom string) *penneStore {
 		log.Fatalf("%s import %s: cannot write %s", logPrefix, importFrom, path)
 	}
 	if err := os.WriteFile(path+".imported", []byte(mark), 0o600); err != nil {
-		log.Fatalf("%s import: cannot record the fingerprint: %v", logPrefix, err)
+		log.Fatalf("%s import: cannot record the fingerprint: %v", logPrefix, redact.Err(err))
 	}
 	log.Printf("%s imported %s (%d bytes) as %s", logPrefix, importFrom, len(b), path)
 	return newPenneStore(path)
@@ -137,7 +143,7 @@ func loadPenneState(path, importFrom string) *penneStore {
 func main() {
 	key, err := nxjwt.LoadRSAKey(getenv("BAAS_SIGNING_KEY", "/keys/baas_signing_key.pem"))
 	if err != nil {
-		log.Fatalf("%s signing key: %v", logPrefix, err)
+		log.Fatalf("%s signing key: %v", logPrefix, redact.Err(err))
 	}
 	coreURL := os.Getenv("NX_CORE_URL")
 	if coreURL == "" {
@@ -154,14 +160,27 @@ func main() {
 	go func() {
 		addr := getenv("NX_API_ADDR", ":20070")
 		log.Printf("%s internal API listening %s (penne API, forwarded god/val)", logPrefix, addr)
-		log.Fatal(http.ListenAndServe(addr, s.internalAPI()))
+		log.Fatal((&http.Server{Addr: addr, Handler: s.internalAPI(), ErrorLog: redact.ErrorLog()}).ListenAndServe())
 	}()
 	srv := &http.Server{
 		Addr: getenv("NX_ADDR", ":21000"), Handler: s,
-		TLSConfig: nxtls.ServerConfig(logPrefix, fixedNames, getenv("NX_CA_DIR", "/data/ca"), debug),
+		TLSConfig: tlsConfig(), ErrorLog: redact.ErrorLog(),
 	}
 	log.Printf("%s listening %s; state %s/penne.json; core %s", logPrefix, srv.Addr, data, coreURL)
 	log.Fatal(srv.ListenAndServeTLS("", ""))
+}
+
+// tlsConfig is the listener's TLS config. The ClientHello trace nxtls offers under debug
+// names the client's address, so it is done here with the address tagged.
+func tlsConfig() *tls.Config {
+	conf := nxtls.ServerConfig(logPrefix, fixedNames, getenv("NX_CA_DIR", "/data/ca"), false)
+	if debug {
+		conf.GetConfigForClient = func(h *tls.ClientHelloInfo) (*tls.Config, error) {
+			log.Printf("%s TLS hello sni=%s from=%s alpn=%v", logPrefix, h.ServerName, redact.Addr(h.Conn.RemoteAddr()), h.SupportedProtos)
+			return nil, nil
+		}
+	}
+	return conf
 }
 
 // ---------- debug recorder (nx-baas main.go) ----------

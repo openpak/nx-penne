@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"nx-penne/internal/penne"
+	"nx-penne/redact"
 )
 
 // The five event type strings the 22.5.0 friends module's dispatcher
@@ -131,7 +132,7 @@ func (h *penneHub) allowed(d PenneDelivery, now time.Time) bool {
 			continue
 		}
 		if !p.fn(d, now) {
-			log.Printf("[nx-penne] penne: policy %q holds %s for %s", p.name, d.Kind, d.UserID)
+			log.Printf("[nx-penne] penne: policy %q holds %s for %s", p.name, d.Kind, redact.Tag(d.UserID))
 			return false
 		}
 	}
@@ -160,7 +161,7 @@ func (s *server) SubmitNotification(d PenneDelivery) PenneSubmission {
 	// log twice in one evening of hardware testing, and the difference between
 	// "never submitted" and "submitted and the console ignored it" is the
 	// difference between two completely different bugs.
-	log.Printf("[nx-penne] notify: %s for %s -> %s (id=%s)", d.Kind, d.UserID, res.Outcome, d.ID)
+	log.Printf("[nx-penne] notify: %s for %s -> %s (id=%s)", d.Kind, redact.Tag(d.UserID), res.Outcome, redact.Tag(d.ID))
 	if res.Accepted {
 		s.penneWake(d.UserID)
 	}
@@ -251,7 +252,7 @@ func (s *server) penneWake(userID string) {
 		// The commonest reason nothing arrives, and it used to be invisible:
 		// the work is claimed and there is nobody to hand it to. It stays
 		// queued for the next connection.
-		log.Printf("[nx-penne] notify: %d delivery(ies) for %s have no live connection; still queued", len(due), userID)
+		log.Printf("[nx-penne] notify: %d delivery(ies) for %s have no live connection; still queued", len(due), redact.Tag(userID))
 	}
 	h.mu.Unlock()
 	for _, sess := range sessions {
@@ -275,7 +276,7 @@ func (s *server) penneWake(userID string) {
 			// A notification is a kind-1 message inside a PutRecord, routed
 			// by its Meta to the recipient's console account
 			// (docs/penne-record-shape-2026-09-16.md).
-			log.Printf("[nx-penne] notify: writing %s to the wire for %s (id=%s, device=%q)", e.Kind, e.UserID, e.ID, sess.device)
+			log.Printf("[nx-penne] notify: writing %s to the wire for %s (id=%s, device=%s)", e.Kind, redact.Tag(e.UserID), redact.Tag(e.ID), redact.Tag(sess.device))
 			for _, frame := range s.penneMessageFrames(e) {
 				sess.offer(e.ID, frame)
 			}
@@ -308,7 +309,7 @@ func (s *server) penneMessageFrames(e *penneOutRec) [][]byte {
 		// Addressed to nobody: the friends module drops an event whose uid is
 		// zero, so this will not land. It still goes out, because a frame on
 		// the wire is visible in a capture and a silent drop is not.
-		log.Printf("[nx-penne] notify: no console account id known for %s; sending %s unaddressed", e.UserID, e.Kind)
+		log.Printf("[nx-penne] notify: no console account id known for %s; sending %s unaddressed", redact.Tag(e.UserID), e.Kind)
 		accounts = []string{""}
 	}
 	now := uint64(time.Now().Unix())
@@ -322,7 +323,7 @@ func (s *server) penneMessageFrames(e *penneOutRec) [][]byte {
 			Body:      body,
 		}
 		if m.TooLong() {
-			log.Printf("[nx-penne] notify: %s for %s exceeds the parser's bounds; dropped", e.Kind, e.UserID)
+			log.Printf("[nx-penne] notify: %s for %s exceeds the parser's bounds; dropped", e.Kind, redact.Tag(e.UserID))
 			continue
 		}
 		frames = append(frames, penne.BuildMessage(m, now, now+penneSyncTTL))

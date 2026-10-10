@@ -36,6 +36,7 @@ import (
 	"github.com/openpak/nx-common/nxapi"
 
 	"nx-penne/internal/penne"
+	"nx-penne/redact"
 )
 
 // penneNotePresence folds a DAPresence frame into the presence store. It
@@ -58,7 +59,7 @@ func (s *server) penneNotePresence(p penne.Table) bool {
 	s.reportPresence(presenceJob{p: nxapi.Presence{
 		UserID: userID, Device: device, State: state, AppID: appID, AppField: appField, GroupID: groupID, ACDIndex: acdIndex,
 	}})
-	log.Printf("[nx-penne] penne: presence user=%s device=%s byte=%d %s app=%s field=%q", userID, device, stateByte, state, appID, appField)
+	log.Printf("[nx-penne] penne: presence user=%s device=%s byte=%d %s app=%s field(%d)", redact.Tag(userID), redact.Tag(device), stateByte, state, appID, len(appField))
 	return true
 }
 

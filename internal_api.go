@@ -18,6 +18,7 @@ import (
 	"github.com/openpak/nx-common/nxhttp"
 
 	"nx-penne/internal/penne"
+	"nx-penne/redact"
 )
 
 // internalAPI is the plain-HTTP listener: the god/val requests nx-baas forwards with the
@@ -98,7 +99,7 @@ func (s *server) penneAPI(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"accepted": res.Accepted, "duplicate": res.Duplicate, "outcome": string(res.Outcome), "id": res.ID})
 	case p == "/topic-messages" && in.Topic != "" && in.Name != "":
 		subs, n := s.topicMessage(strings.ToLower(in.Topic), in.Name, in.Receivers, in.Body)
-		log.Printf("[nx-penne] topic message %s -> topic %q: %d subscriber(s), %d connection(s)", in.Name, in.Topic, subs, n)
+		log.Printf("[nx-penne] topic message %s -> topic %s: %d subscriber(s), %d connection(s)", redact.IDs(in.Name), redact.IDs(in.Topic), subs, n)
 		writeJSON(w, 200, map[string]any{"subscribers": subs, "delivered": n})
 	case p == "/token-bindings" && in.NotificationToken != "" && in.UserID != "":
 		writeJSON(w, 200, map[string]any{"bound": s.bindToken(in.NotificationToken, in.UserID)})
@@ -109,7 +110,7 @@ func (s *server) penneAPI(w http.ResponseWriter, r *http.Request) {
 		user := strings.TrimSuffix(strings.TrimPrefix(p, "/users/"), "/close")
 		n := s.notifHub().closeUser(user)
 		if n > 0 {
-			log.Printf("[nx-penne] closed %d notification connection(s) of user %s (ban)", n, user)
+			log.Printf("[nx-penne] closed %d notification connection(s) of user %s (ban)", n, redact.Tag(user))
 		}
 		writeJSON(w, 200, map[string]any{"closed": n})
 	default:
@@ -168,7 +169,7 @@ func (s *server) topicMessage(topic, name, receivers, body string) (subscribers,
 func (s *server) bindToken(tok, userID string) bool {
 	store := s.notifStore()
 	if acct := store.TokenAccount(tok); acct != "" && store.BindAccount(acct, userID) {
-		log.Printf("[nx-penne] console account %s is %s (olsc token upload)", acct, userID)
+		log.Printf("[nx-penne] console account %s is %s (olsc token upload)", redact.Tag(acct), redact.Tag(userID))
 		return true
 	}
 	return false

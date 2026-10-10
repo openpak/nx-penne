@@ -23,6 +23,8 @@ import (
 	"time"
 
 	"github.com/openpak/nx-common/nxapi"
+
+	"nx-penne/redact"
 )
 
 // identity is what Penne asks the core (nxapi.Client implements it; tests use a fake).
@@ -42,7 +44,7 @@ func (s *server) userLock(ctx context.Context, userID string) string {
 	u, err := s.core.User(ctx, userID)
 	if err != nil {
 		if !errors.Is(err, nxapi.ErrNotFound) {
-			log.Printf("[nx-penne] identity: lock of %s unknown (%v); letting it connect", userID, err)
+			log.Printf("[nx-penne] identity: lock of %s unknown (%v); letting it connect", redact.Tag(userID), redact.Err(err))
 		}
 		return ""
 	}
@@ -60,7 +62,7 @@ func (s *server) onlineNotification(viewer, friend string) bool {
 	p, err := s.core.FriendPreference(ctx, viewer, friend)
 	if err != nil {
 		if !errors.Is(err, nxapi.ErrNotFound) {
-			log.Printf("[nx-penne] identity: preference %s/%s unknown (%v); allowing", viewer, friend, err)
+			log.Printf("[nx-penne] identity: preference %s/%s unknown (%v); allowing", redact.Tag(viewer), redact.Tag(friend), redact.Err(err))
 		}
 		return true
 	}
@@ -82,7 +84,7 @@ func (s *server) reportPresence(job presenceJob) {
 	select {
 	case s.presence <- job:
 	default:
-		log.Printf("[nx-penne] presence queue full; dropped user=%s device=%s", job.p.UserID, job.p.Device)
+		log.Printf("[nx-penne] presence queue full; dropped user=%s device=%s", redact.Tag(job.p.UserID), redact.Tag(job.p.Device))
 	}
 }
 
@@ -99,9 +101,9 @@ func (s *server) presenceWorker() {
 		cancel()
 		switch {
 		case errors.Is(err, nxapi.ErrNotFound):
-			log.Printf("[nx-penne] presence for unknown user %s; ignored by the core", job.p.UserID)
+			log.Printf("[nx-penne] presence for unknown user %s; ignored by the core", redact.Tag(job.p.UserID))
 		case err != nil:
-			log.Printf("[nx-penne] presence for %s did not reach the core: %v", job.p.UserID, err)
+			log.Printf("[nx-penne] presence for %s did not reach the core: %v", redact.Tag(job.p.UserID), redact.Err(err))
 		}
 	}
 }

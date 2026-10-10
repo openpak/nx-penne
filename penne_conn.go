@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"nx-penne/internal/penne"
+	"nx-penne/redact"
 )
 
 // frontlineKeepalive is how often the held-open connection is flushed. A Flush
@@ -74,7 +75,7 @@ func (s *server) frontline(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// Expired, revoked, unknown or wrong-device: a denial is a denial, and
 		// the console re-registers rather than retrying forever.
-		log.Printf("[nx-penne] penne frontline: denied (%v)", err)
+		log.Printf("[nx-penne] penne frontline: denied (%v)", redact.Err(err))
 		writeJSON(w, 401, map[string]any{"status": 401, "errorCode": "invalid_credentials",
 			"title": "Invalid credentials", "detail": "The login ticket is not usable",
 			"type": "https://penne.nintendo.net/errors/1.0.0/401/invalid_credentials"})
@@ -88,7 +89,7 @@ func (s *server) frontline(w http.ResponseWriter, r *http.Request) {
 	// connection is open closes it (closeUser, from the core's account_banned event).
 	{
 		if lock := s.userLock(r.Context(), s.sessionUser(rec)); lock != "" {
-			log.Printf("[nx-penne] penne frontline: account %s is %s; refusing", rec.UserID, lock)
+			log.Printf("[nx-penne] penne frontline: account %s is %s; refusing", redact.Tag(rec.UserID), lock)
 			writeJSON(w, 403, map[string]any{"status": 403, "errorCode": "forbidden",
 				"title": "Forbidden", "detail": "This account cannot use the OpenPak network",
 				"type": "https://penne.nintendo.net/errors/1.0.0/403/forbidden"})
@@ -129,7 +130,7 @@ func (s *server) frontlineHeldOpen(w http.ResponseWriter, r *http.Request, rec *
 	defer s.penneHub.detach(sess)
 	defer cancel()
 	log.Printf("[nx-penne] penne frontline: open user=%s device=%s proto=%s te=%v len=%d",
-		sess.user, rec.DeviceID, r.Proto, r.TransferEncoding, r.ContentLength)
+		redact.Tag(sess.user), redact.Tag(rec.DeviceID), r.Proto, r.TransferEncoding, r.ContentLength)
 
 	// The console reads exactly one message here, with a 70-second deadline,
 	// and accepts only HandoverResult or Reset (RVA 0xd9730): everything else
@@ -209,7 +210,7 @@ func (s *server) frontlineStream(w http.ResponseWriter, r *http.Request, rec *pe
 	}
 	conn, brw, err := hj.Hijack()
 	if err != nil {
-		log.Printf("[nx-penne] penne frontline: hijack: %v", err)
+		log.Printf("[nx-penne] penne frontline: hijack: %v", redact.Err(err))
 		return
 	}
 	defer conn.Close()
@@ -236,7 +237,7 @@ func (s *server) frontlineStream(w http.ResponseWriter, r *http.Request, rec *pe
 	s.penneHub.attach(sess)
 	defer s.penneHub.detach(sess)
 	log.Printf("[nx-penne] penne frontline: open (stream) user=%s device=%s proto=%s te=%v",
-		sess.user, rec.DeviceID, r.Proto, r.TransferEncoding)
+		redact.Tag(sess.user), redact.Tag(rec.DeviceID), r.Proto, r.TransferEncoding)
 
 	// Reader: the client's frames arrive as chunked request-body bytes.
 	body := newChunkReader(brw.Reader)
@@ -431,7 +432,7 @@ func (s *server) sessionUser(rec *penneTicketRec) string {
 		return ""
 	}
 	if u := s.notifStore().ResolveUser(rec.UserID); u != "" && u != rec.UserID {
-		log.Printf("[nx-penne] penne frontline: ticket names console %s; delivering for account %s", rec.UserID, u)
+		log.Printf("[nx-penne] penne frontline: ticket names console %s; delivering for account %s", redact.Tag(rec.UserID), redact.Tag(u))
 		return u
 	}
 	return rec.UserID
@@ -502,6 +503,9 @@ func (s *server) penneSyncReply(entries []penne.RootEntry, count uint32, now uin
 // of the client's own messages are what the spec still marks open, so the first
 // ones to arrive are worth keeping verbatim.
 func frameHex(frame []byte) string {
+	if !redact.Bodies {
+		return fmt.Sprintf(" len=%d", len(frame))
+	}
 	const max = 4096
 	if len(frame) <= max {
 		return fmt.Sprintf(" len=%d hex=%x", len(frame), frame)
@@ -527,7 +531,7 @@ func (s *server) penneRead(sess *penneSession, body io.Reader) {
 			}
 			if sess.ctx.Err() == nil {
 				s.notifStore().malformed.Add(1)
-				log.Printf("[nx-penne] penne frontline: read ended (%v); closing", err)
+				log.Printf("[nx-penne] penne frontline: read ended (%v); closing", redact.Err(err))
 				sess.cancel()
 			}
 			return
@@ -545,7 +549,7 @@ func (s *server) penneDispatch(sess *penneSession, frame []byte) {
 	env, err := penne.DecodeEnvelope(frame)
 	if err != nil {
 		s.notifStore().malformed.Add(1)
-		log.Printf("[nx-penne] penne frontline: malformed frame (%v); closing", err)
+		log.Printf("[nx-penne] penne frontline: malformed frame (%v); closing", redact.Err(err))
 		sess.cancel()
 		return
 	}
@@ -583,14 +587,14 @@ func (s *server) penneDispatch(sess *penneSession, frame []byte) {
 		// (penne_records.go); what we claim here is what the console claims.
 		reply, shape := s.penneSyncReply(entries, count, now)
 		if reply == nil {
-			log.Printf("[nx-penne] penne: RootHash from user=%s [%s]; answering with silence (%s)", sess.user, strings.Join(names, " "), shape)
+			log.Printf("[nx-penne] penne: RootHash from user=%s [%s]; answering with silence (%s)", redact.Tag(sess.user), redact.IDs(strings.Join(names, " ")), shape)
 			return
 		}
 		select {
 		case sess.send <- penneOutbound{frame: reply}:
-			log.Printf("[nx-penne] penne: RootHash from user=%s [%s]; answered %s", sess.user, strings.Join(names, " "), shape)
+			log.Printf("[nx-penne] penne: RootHash from user=%s [%s]; answered %s", redact.Tag(sess.user), redact.IDs(strings.Join(names, " ")), shape)
 		default:
-			log.Printf("[nx-penne] penne: RootHash from user=%s dropped, send queue full", sess.user)
+			log.Printf("[nx-penne] penne: RootHash from user=%s dropped, send queue full", redact.Tag(sess.user))
 		}
 
 	case penne.TypeSubscribeTopic: // 0x17, firmware-confirmed
@@ -619,7 +623,7 @@ func (s *server) penneDispatch(sess *penneSession, frame []byte) {
 		// Every topic is logged by name: which string a followed News channel is
 		// subscribed under is still unrecovered, and this line is how hardware
 		// answers it (news.go).
-		log.Printf("[nx-penne] penne: subscribed user=%s device=%s topic=%s", sess.user, sess.device, topic)
+		log.Printf("[nx-penne] penne: subscribed user=%s device=%s topic=%s", redact.Tag(sess.user), redact.Tag(sess.device), redact.IDs(topic))
 		// Confirmation: SubscriptionUpdated carries one u64 (recovered shape);
 		// the value's meaning is not recovered -- we send the unix second as
 		// the least-surprising candidate, flagged in the protocol spec.
@@ -635,7 +639,7 @@ func (s *server) penneDispatch(sess *penneSession, frame []byte) {
 	case penne.TypeAck: // 9: one string — the name it read out of our frame
 		if payload, ok := env.Payload(); ok {
 			if id, ok := payload.String(0); ok {
-				log.Printf("[nx-penne] penne: ack=%q user=%s", id, sess.user)
+				log.Printf("[nx-penne] penne: ack=%q user=%s", redact.IDs(id), redact.Tag(sess.user))
 				// Best-effort replay ack: a message id naming one of our
 				// queued events settles that delivery.
 				if !store.AckDelivery(sess.user, id, time.Now()) {
@@ -644,13 +648,13 @@ func (s *server) penneDispatch(sess *penneSession, frame []byte) {
 					}
 				}
 			} else if v, ok := payload.U64(0); ok {
-				log.Printf("[nx-penne] penne: ack=%d user=%s", v, sess.user)
+				log.Printf("[nx-penne] penne: ack=%d user=%s", v, redact.Tag(sess.user))
 			}
 		}
 	case penne.TypeResendRequest: // 26: one string field; treat it as replay-by-id
 		if payload, ok := env.Payload(); ok {
 			if id, ok := payload.String(0); ok {
-				log.Printf("[nx-penne] penne: resend requested for %s", id)
+				log.Printf("[nx-penne] penne: resend requested for %s", redact.IDs(id))
 				s.penneWakeConsole(sess)
 			}
 		}
@@ -669,7 +673,7 @@ func (s *server) penneDispatch(sess *penneSession, frame []byte) {
 			log.Printf("[nx-penne] penne: %s without a record name%s", env.TypeName(), frameHex(frame))
 			return
 		}
-		log.Printf("[nx-penne] penne: %s %q from user=%s", env.TypeName(), name, sess.user)
+		log.Printf("[nx-penne] penne: %s %s from user=%s", env.TypeName(), redact.IDs(name), redact.Tag(sess.user))
 		sess.ack(name)
 
 	case penne.TypePowerState: // 0x0e: one string, "Awake" or "Asleep"
@@ -683,14 +687,14 @@ func (s *server) penneDispatch(sess *penneSession, frame []byte) {
 			return
 		}
 		// The console sends "Awake" or "Sleep" and waits for that same word.
-		log.Printf("[nx-penne] penne: power state %s user=%s", state, sess.user)
+		log.Printf("[nx-penne] penne: power state %s user=%s", state, redact.Tag(sess.user))
 		sess.ack(state)
 
 	case penne.TypeHi, penne.TypeIdle, penne.TypeSubscriptionListRequest:
 		// Recovered empty/near-empty client messages: noted, no answer defined
 		// by evidence. Logged by name because the first one the console ever
 		// sends is what settles the opening handshake.
-		log.Printf("[nx-penne] penne: %s from user=%s device=%s%s", env.TypeName(), sess.user, sess.device, frameHex(frame))
+		log.Printf("[nx-penne] penne: %s from user=%s device=%s%s", env.TypeName(), redact.Tag(sess.user), redact.Tag(sess.device), frameHex(frame))
 	case penne.TypeLeafHash:
 		// The other half of the sync, and the frame this server has always
 		// dropped. The console is not rejecting anything here: it names a
@@ -714,12 +718,12 @@ func (s *server) penneDispatch(sess *penneSession, frame []byte) {
 		ours := s.records().LeavesUnder(sess.user, ns)
 		now := uint64(time.Now().Unix())
 		reply := penne.BuildLeafHashReply(ns, ours, uint32(len(ours)), now, now+penneSyncTTL)
-		log.Printf("[nx-penne] penne: LeafHash for %q from user=%s (theirs=%d, ours=%d); answering",
-			ns, sess.user, len(theirs), len(ours))
+		log.Printf("[nx-penne] penne: LeafHash for %s from user=%s (theirs=%d, ours=%d); answering",
+			redact.IDs(ns), redact.Tag(sess.user), len(theirs), len(ours))
 		select {
 		case sess.send <- penneOutbound{frame: reply}:
 		default:
-			log.Printf("[nx-penne] penne: LeafHash reply for %q dropped, send queue full", ns)
+			log.Printf("[nx-penne] penne: LeafHash reply for %s dropped, send queue full", redact.IDs(ns))
 		}
 
 	case penne.TypeDAPresence:
