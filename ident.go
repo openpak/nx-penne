@@ -110,7 +110,7 @@ func (s *server) presenceWorker() {
 
 // renewDevicePresence keeps alive what a console has already published (penne_conn.go).
 func (s *server) renewDevicePresence(userID, deviceID string) {
-	if deviceID == "" {
+	if userID == "" { // no device is fine: the core renews every claim a console made for the user
 		return
 	}
 	s.reportPresence(presenceJob{p: nxapi.Presence{UserID: userID, Device: deviceID}, renew: true})

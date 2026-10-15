@@ -111,7 +111,27 @@ func TestDAPresenceAndRenewalsReachTheCore(t *testing.T) {
 	eventually(t, "renewal at the core", func() bool {
 		c.mu.Lock()
 		defer c.mu.Unlock()
-		return len(c.renewals) == 1 && c.renewals[0].Device == "cccccccccccc0001"
+		pair, user := false, false
+		for _, r := range c.renewals {
+			pair = pair || r.Device == "cccccccccccc0001"
+			user = user || (r.UserID == "aaaaaaaaaaaa0001" && r.Device == "")
+		}
+		return pair && user
+	})
+}
+
+// A console that reconnected has published nothing on the new connection, yet the claim it made
+// on the last one must not lapse: the session's user is renewed with no device named.
+func TestReconnectedSessionStillRenewsItsUser(t *testing.T) {
+	s := &server{core: mustStore(t)}
+	withPresenceWorker(s)
+	c := testCore(s)
+	sess := &penneSession{user: "aaaaaaaaaaaa0001", penneID: "reg-2"}
+	s.penneRenewPresence(sess)
+	eventually(t, "user-level renewal", func() bool {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		return len(c.renewals) == 1 && c.renewals[0].UserID == "aaaaaaaaaaaa0001" && c.renewals[0].Device == ""
 	})
 }
 

@@ -791,6 +791,13 @@ func (s *server) penneRenewPresence(sess *penneSession) {
 		s.renewDevicePresence(user.(string), device.(string))
 		return true
 	})
+	// A console that reconnected has published nothing on this connection, so the pairs above
+	// are empty and its claim from the previous one would lapse two minutes later (2026-10-15:
+	// leia read offline to everyone, no renew reached the core in 45 minutes). The user the
+	// session belongs to is enough: the core renews every claim a console made for them.
+	if sess.user != "" {
+		s.renewDevicePresence(sess.user, "")
+	}
 }
 
 // penneWakeConsole replays what is owed to every profile on this console, not
