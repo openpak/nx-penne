@@ -106,6 +106,8 @@ func (s *server) penneAPI(w http.ResponseWriter, r *http.Request) {
 	case p == "/device-messages" && (in.PenneID != "" || in.DauthUser != "") && in.Name != "":
 		id, n := s.deviceMessage(in.PenneID, in.DauthUser, in.Name, in.Receivers, in.Body)
 		writeJSON(w, 200, map[string]any{"penne_id": id, "connections": n})
+	case p == "/broadcasts" && in.Name != "":
+		writeJSON(w, 200, map[string]any{"connections": s.broadcast(in.Name, in.Receivers, in.Body)})
 	case strings.HasPrefix(p, "/users/") && strings.HasSuffix(p, "/close"):
 		user := strings.TrimSuffix(strings.TrimPrefix(p, "/users/"), "/close")
 		n := s.notifHub().closeUser(user)
@@ -116,6 +118,22 @@ func (s *server) penneAPI(w http.ResponseWriter, r *http.Request) {
 	default:
 		apiErr(w, http.StatusNotFound, "no such penne route, or a required field is missing")
 	}
+}
+
+// broadcast writes one message to every live connection and returns how many took it.
+func (s *server) broadcast(name, receivers, body string) int {
+	frame := pushFrame(name, receivers, body, uint64(time.Now().Unix()))
+	h := s.notifHub()
+	h.mu.Lock()
+	var live []*penneSession
+	for _, list := range h.sessions {
+		live = append(live, list...)
+	}
+	h.mu.Unlock()
+	for _, sess := range live {
+		sess.offer("", frame)
+	}
+	return len(live)
 }
 
 // closeUser cancels a BAAS user's live frontline sessions and reports how many.

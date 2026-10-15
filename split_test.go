@@ -172,6 +172,10 @@ func TestPenneAPI(t *testing.T) {
 		t.Fatalf("device message = %d %s", w.Code, w.Body)
 	}
 
+	if w = penneAPIDo(t, s, "POST", "/internal/penne/broadcasts", `{"name":"versionlist2","receivers":"versionlist2","body":"{}"}`); w.Code != 200 || !strings.Contains(w.Body.String(), `"connections":`) || strings.Contains(w.Body.String(), `"connections":0`) {
+		t.Fatalf("broadcast = %d %s", w.Code, w.Body)
+	}
+
 	if w := penneAPIDo(t, s, "POST", "/internal/penne/token-bindings", `{"notification_token":"unknown","user_id":"`+u.ID+`"}`); w.Code != 200 || !strings.Contains(w.Body.String(), `"bound":false`) {
 		t.Fatalf("token binding = %d %s", w.Code, w.Body)
 	}

@@ -177,6 +177,7 @@ const (
 	PathPenneTopicMessages  = "/internal/penne/topic-messages"  // POST TopicMessage -> TopicResult
 	PathPenneTokenBindings  = "/internal/penne/token-bindings"  // POST TokenBinding -> {"bound":bool}
 	PathPenneDeviceMessages = "/internal/penne/device-messages" // POST DeviceMessage -> DeviceResult
+	PathPenneBroadcasts     = "/internal/penne/broadcasts"      // POST DeviceMessage (no ids) -> DeviceResult.Connections
 	PathPenneUsers          = "/internal/penne/users/"          // POST {id}/close -> {"closed":n}
 )
 
@@ -343,6 +344,16 @@ func (c *Client) CloseUser(ctx context.Context, userID string) (int, error) {
 	}
 	err := c.Do(ctx, http.MethodPost, PathPenneUsers+url.PathEscape(userID)+"/close", struct{}{}, &r)
 	return r.Closed, err
+}
+
+// Broadcast sends one message to every live connection (a catalog change every console
+// should hear about). The DeviceMessage's ids are ignored.
+func (c *Client) Broadcast(ctx context.Context, m DeviceMessage) (*DeviceResult, error) {
+	var r DeviceResult
+	if err := c.Do(ctx, http.MethodPost, PathPenneBroadcasts, m, &r); err != nil {
+		return nil, err
+	}
+	return &r, nil
 }
 
 func (c *Client) DeviceMessage(ctx context.Context, m DeviceMessage) (*DeviceResult, error) {
