@@ -16,8 +16,7 @@ Closing it immediately errors the client; the Splatoon 2 form of that failure is
 
 Source: `servers/splatoon-3/docs/provenance.md`, "The pre-gRPC REST chain":
 `POST` to `fro-N...` — "the connection must be **held open** as a bidirectional stream (chunked,
-heartbeat) for room-code registration. Closing it immediately errors the client." A clean-room
-reading of the earlier network `splatoon-3` server under `docs/clean-room-policy.md`; no code,
+heartbeat) for room-code registration. Closing it immediately errors the client." Recorded as observed behaviour under `docs/clean-room-policy.md`; no code,
 structure or wording carried across.
 
 ## What is and is not known
