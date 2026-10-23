@@ -304,7 +304,7 @@ func (s *penneStore) NoteAccount(assocID, accountID, userID string) {
 // carries that user's own token, and /links carries its id token. Two profiles
 // on one console were both mapped to whoever signed in last, so one of them
 // never received a notification (2026-09-19,
-// docs/switch/friends-notifications-firmware-2026-09-19.md §1).
+// internal research notes §1).
 func (s *penneStore) BindAccount(accountID, userID string) bool {
 	if accountID == "" || userID == "" {
 		return false

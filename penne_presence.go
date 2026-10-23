@@ -18,7 +18,7 @@ package main
 //	  2: table
 //	       0: u8      state: 1 INACTIVE (no game), 2 ONLINE (in a game, no
 //	                  session), 3 PLAYING (online-play session open)
-//	                  [firmware, friends 0x1bfe80; docs/switch/friends-presence-firmware-2026-09-19.md]
+//	                  [firmware, friends 0x1bfe80; internal research notes]
 //	       1: string  the extras document, the same shape this server serves
 //	       2: u8      flags
 //

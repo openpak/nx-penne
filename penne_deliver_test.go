@@ -253,7 +253,7 @@ func TestMessageFramesStillSendWithoutAKnownAccount(t *testing.T) {
 // registered it. Each notification token names its profile; the olsc upload
 // of that token proves the user. A notification for the other profile then
 // goes down the same connection, addressed to its own profile
-// (docs/switch/friends-notifications-firmware-2026-09-19.md §1).
+// (internal research notes §1).
 func TestNotificationReachesTheSecondProfileOnAConsole(t *testing.T) {
 	s := &server{core: mustStore(t)}
 	leia, _ := testCore(s).NewUser()

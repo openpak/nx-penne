@@ -734,7 +734,7 @@ func (s *server) penneDispatch(sess *penneSession, frame []byte) {
 		// presence frame is a request like any other, and until it is answered
 		// the console publishes nothing else and is torn down ten seconds
 		// later. That is why only one profile's presence ever reached us
-		// (docs/switch/presence-publish-gate-2026-09-20.md).
+		// (internal research notes).
 		p, ok := env.Payload()
 		if !ok {
 			store.unknownType.Add(1)
