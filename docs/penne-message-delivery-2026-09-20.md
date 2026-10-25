@@ -500,7 +500,7 @@ profile's slot tables.
 ## 6. Why presence is published for the profile that is NOT playing
 
 Live: one console, two profiles. **<user-b>** (`aaaaaaaaaaaa0002`, Uid
-`1000000000b200020000000000000001`) is in the foreground playing Kirby's Dream
+`ACCOUNT_ID`) is in the foreground playing Kirby's Dream
 Buffet. Every `DAPresence` we receive is for **<user-a>**
 (`aaaaaaaaaaaa0001`), `INACTIVE`, no app, empty appField, every ~10–60 s. Over
 72 h, essentially nothing for <user-b>.
@@ -669,7 +669,7 @@ In order, cheapest first. Each one is a clean yes/no.
 3. **Rewrite the record.** As <user-b>, unlink and re-link her Nintendo Account
    (System Settings → Users → <user-b> → Nintendo Account), or sign her out of and
    back into the online service. While doing it, watch nx-baas for, in order:
-   - `POST /v1/accounts/1000000000b200020000000000000001/links`
+   - `POST /v1/accounts/ACCOUNT_ID/links`
    - `PUT /1.0.0/push_channels/aaaaaaaaaaaa0002/<deviceAccountId>`
    - `PATCH …/links` about 40 s later
 

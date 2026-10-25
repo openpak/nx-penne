@@ -97,7 +97,7 @@ go test -race ./internal/penne/ -v             # wire protocol fixtures
 # pipeline demo without a console:
 NX_INTERNAL_KEY=dev go run . & # then, with a user in baas.json:
 curl -s -XPOST localhost:20070/internal/notifications/test \
-  -H 'X-Internal-Key: dev' -d '{"user_id":"<baas id>","kind":"friend_request_received","payload":{"friendId":"0123456789abcdef"}}'
+  -H 'X-Internal-Key: dev' -d '{"user_id":"<baas id>","kind":"friend_request_received","payload":{"friendId":"ACCOUNT_ID"}}'
 ```
 
 ## Known blockers
