@@ -3,7 +3,7 @@
 Status: implemented-against. Supersedes: nothing. Date: 2026-09-11.
 Scope: the persistent notification connection ("frontline") of Penne/NPNS on
 Horizon 22.5.0, plus the REST registration surfaces that feed it. This document
-is the protocol gate required by `../prds/native-switch-penne-notifications-prd.md`
+is the protocol gate required by `openpak/prds/native-switch-penne-notifications-prd.md`
 (NTF-02): no native delivery is claimed beyond what is stated here.
 
 Every statement carries a provenance label:
