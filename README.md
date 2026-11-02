@@ -31,14 +31,12 @@ environment table and the quadlet/Traefik layout are in [deploy.md](docs/deploy.
 ## Docs
 
 - [Protocol](docs/protocol.md)
-- [Evidence](docs/evidence.md)
 - [Deploy](docs/deploy.md)
 - [Notes](docs/notes.md)
 - [Penne frontline](docs/penne-frontline.md)
 - [Penne message delivery (2026-09-20)](docs/penne-message-delivery-2026-09-20.md)
 - [Penne protocol](docs/penne-protocol.md)
 - [Penne record shape (2026-09-16)](docs/penne-record-shape-2026-09-16.md)
-- [Penne workstream B handoff](docs/penne-workstream-b-handoff.md)
 
 ## Licence
 
