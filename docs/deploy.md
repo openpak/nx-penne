@@ -8,8 +8,8 @@
 | `NX_INTERNAL_KEY` | | the shared internal key; the penne API refuses everyone without it |
 | `NX_ADDR` | `:21000` | TLS for consoles (Traefik SNI passthrough) |
 | `NX_API_ADDR` | `:20070` | plain HTTP: `/internal/penne/*` and the god/val routes nx-baas forwards |
-| `NX_DATA` | `/data` | `penne.json` |
-| `NX_PENNE_IMPORT` | | first start only: nx-baas's `penne.json` to start from |
+| `NX_DATA` | `/data` | legacy `penne.json`, imported once into Postgres when the database is empty; kept |
+| `NX_PENNE_DATABASE_URL` | required | Postgres store (table `penne_state`) |
 | `NX_CA_DIR` | `/data/ca` | `ca.pem`/`ca.key` that sign the listener's certificates |
 | `BAAS_SIGNING_KEY` | `/keys/baas_signing_key.pem` | verifies the tokens nx-baas mints |
 | `NX_PENNE_RECEIVER`, `NX_PENNE_SYNC_PROBE`, `NX_PENNE_RECONCILE`, `NX_DEBUG` | | as in nx-baas |

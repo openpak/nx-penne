@@ -64,7 +64,7 @@ func (s *server) notifStore() *penneStore {
 	penneWiring.Lock()
 	defer penneWiring.Unlock()
 	if s.penneState == nil {
-		s.penneState = newPenneStore("")
+		s.penneState = newPenneStore()
 	}
 	if s.penneHub == nil {
 		s.penneHub = newPenneHub()

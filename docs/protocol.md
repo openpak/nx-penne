@@ -8,7 +8,7 @@ It owns Penne's hostnames and state:
 - **fro-** (`fro-3.hac.lp1.penne.srv.nintendo.net`): the persistent frontline, one connection
   per console, carrying FlatBuffers frames both ways (hijacked HTTP/1.1, see
   `penne_conn.go`): sync, subscriptions, DAPresence, acks, and the notifications;
-- `$NX_DATA/penne.json`: registrations, tickets, subscriptions and the delivery outbox.
+- Postgres table `penne_state` (was `$NX_DATA/penne.json`): registrations, tickets, subscriptions and the delivery outbox.
 
 The identity core (nx-baas) decides what to tell whom — friend events, presence fan-out,
 invitations, news, bans, parental-control pushes — and submits it through the penne API

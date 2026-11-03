@@ -13,16 +13,16 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
-	"os"
 	"slices"
 	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"nx-penne/redact"
 )
@@ -142,12 +142,12 @@ type penneData struct {
 	Delivered    map[string]map[string]int64 `json:"delivered"`     // user id -> event id -> time (retention window)
 }
 
-// penneStore is the durable Penne state. path == "" keeps everything in memory
-// (tests and direct-handler use); main() supplies the deployment path.
+// penneStore is the durable Penne state. pg == nil keeps everything in memory
+// (tests and direct-handler use); main() supplies the Postgres pool (penne_pg.go).
 type penneStore struct {
-	mu   sync.Mutex
-	path string
-	d    *penneData
+	mu sync.Mutex
+	pg *pgxpool.Pool
+	d  *penneData
 
 	// Sanitized counters for the ops surface (PRD §6); never payloads.
 	// Atomic: bumped on request paths, read by Snapshot, all lock-free.
@@ -157,80 +157,18 @@ type penneStore struct {
 	dropped                atomic.Uint64
 }
 
-func newPenneStore(path string) *penneStore {
-	s := &penneStore{path: path, d: &penneData{
-		Assocs: map[string]*penneAssoc{}, ByDevice: map[string]string{}, ByUser: map[string]string{},
-		ConsoleUsers: map[string]string{}, AccountUsers: map[string]string{},
-		AccountProven: map[string]bool{},
-		Tokens:        map[string]*penneTokenRec{}, Tickets: map[string]*penneTicketRec{},
-		Subs: map[string][]*penneSubRec{}, PushChannels: map[string]*pennePushChan{},
-		Outbox: map[string][]*penneOutRec{}, Delivered: map[string]map[string]int64{},
-	}}
-	if path == "" {
-		return s
-	}
-	if b, err := os.ReadFile(path); err == nil {
-		if err := json.Unmarshal(b, s.d); err != nil {
-			log.Printf("[nx-penne] penne store %s unreadable (%v); starting empty", path, redact.Err(err))
-			return s
-		}
-		// Records predating a schema change can lack the maps.
-		if s.d.Assocs == nil {
-			s.d.Assocs = map[string]*penneAssoc{}
-		}
-		if s.d.ByDevice == nil {
-			s.d.ByDevice = map[string]string{}
-		}
-		if s.d.ConsoleUsers == nil {
-			s.d.ConsoleUsers = map[string]string{}
-		}
-		if s.d.AccountUsers == nil {
-			s.d.AccountUsers = map[string]string{}
-		}
-		if s.d.AccountProven == nil {
-			s.d.AccountProven = map[string]bool{}
-		}
-		if s.d.ByUser == nil {
-			s.d.ByUser = map[string]string{}
-		}
-		if s.d.Tokens == nil {
-			s.d.Tokens = map[string]*penneTokenRec{}
-		}
-		if s.d.Tickets == nil {
-			s.d.Tickets = map[string]*penneTicketRec{}
-		}
-		if s.d.Subs == nil {
-			s.d.Subs = map[string][]*penneSubRec{}
-		}
-		if s.d.PushChannels == nil {
-			s.d.PushChannels = map[string]*pennePushChan{}
-		}
-		if s.d.Outbox == nil {
-			s.d.Outbox = map[string][]*penneOutRec{}
-		}
-		if s.d.Delivered == nil {
-			s.d.Delivered = map[string]map[string]int64{}
-		}
-	}
+func newPenneStore() *penneStore {
+	s := &penneStore{d: &penneData{}}
+	s.d.fill()
 	return s
 }
 
 func (s *penneStore) saveLocked() {
-	if s.path == "" {
-		return
+	if s.pg == nil {
+		return // tests and direct-handler use: memory only
 	}
-	b, err := json.Marshal(s.d)
-	if err != nil {
-		log.Printf("[nx-penne] penne store: marshal: %v", redact.Err(err))
-		return
-	}
-	tmp := s.path + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o600); err != nil {
-		log.Printf("[nx-penne] penne store: write: %v", redact.Err(err))
-		return
-	}
-	if err := os.Rename(tmp, s.path); err != nil {
-		log.Printf("[nx-penne] penne store: rename: %v", redact.Err(err))
+	if err := s.persist(); err != nil {
+		log.Printf("[nx-penne] penne store: save: %v", redact.Err(err))
 	}
 }
 

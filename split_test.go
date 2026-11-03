@@ -12,7 +12,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -209,38 +208,6 @@ func TestPenneAPI(t *testing.T) {
 	t.Setenv("NX_INTERNAL_KEY", "other")
 	if w := penneAPIDo(t, s, "GET", "/internal/penne/registrations/"+id, ""); w.Code != 401 {
 		t.Fatalf("wrong key = %d", w.Code)
-	}
-}
-
-// The first start takes nx-baas's penne.json as it stood; later starts keep their own; and a
-// second cut-over after a rollback -- nx-baas's file moved on meanwhile -- takes it again
-// instead of resuming from our stale copy.
-func TestImportFollowsNxBaasAcrossARollback(t *testing.T) {
-	dir := t.TempDir()
-	src := filepath.Join(dir, "baas-penne.json")
-	old := newPenneStore(src)
-	id, pw := old.Register("dev1", "user1", "", time.Now())
-
-	mine := filepath.Join(dir, "penne.json")
-	ps := loadPenneState(mine, src)
-	if _, err := ps.CheckAssoc(id, pw, time.Now()); err != nil {
-		t.Fatalf("imported registration does not verify: %v", err)
-	}
-	ps.Register("dev2", "user2", "", time.Now())
-	again := loadPenneState(mine, src)
-	if again.AssocForDevice("dev2") == nil || again.AssocForDevice("dev1") == nil {
-		t.Fatal("a restart re-imported nx-baas's file over our own")
-	}
-
-	// Rollback: nx-baas serves Penne again and its file changes.
-	back := newPenneStore(src)
-	back.Register("dev3", "user3", "", time.Now())
-	recut := loadPenneState(mine, src)
-	if recut.AssocForDevice("dev3") == nil {
-		t.Fatal("the second cut-over resumed from our stale state instead of nx-baas's")
-	}
-	if kept, _ := filepath.Glob(mine + ".before-import-*"); len(kept) != 1 {
-		t.Fatalf("our replaced state was not kept aside: %v", kept)
 	}
 }
 

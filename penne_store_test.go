@@ -7,13 +7,12 @@ package main
 
 import (
 	"fmt"
-	"path/filepath"
 	"testing"
 	"time"
 )
 
 func TestSweepWakesFailedDeliveryWhenRetryBecomesDue(t *testing.T) {
-	s := newPenneStore("")
+	s := newPenneStore()
 	now := time.Now()
 	res := s.Submit(PenneDelivery{ID: "retry-event", UserID: "u1", Kind: EventFriendDeleted}, now)
 	if !res.Accepted {
@@ -32,10 +31,10 @@ func TestSweepWakesFailedDeliveryWhenRetryBecomesDue(t *testing.T) {
 }
 
 func TestRegistrationPersistsAcrossRestart(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "penne.json")
-	s := newPenneStore(path)
+	dsn := testDSN(t)
+	s := testPenneStore(t, dsn, "")
 	id, pw := s.Register("dev1", "user1", "nsa1", time.Now())
-	if _, err := newPenneStore(path).CheckAssoc(id, pw, time.Now()); err != nil {
+	if _, err := testPenneStore(t, dsn, "").CheckAssoc(id, pw, time.Now()); err != nil {
 		t.Fatalf("registration did not survive a restart: %v", err)
 	}
 }
@@ -44,7 +43,7 @@ func TestRegistrationPersistsAcrossRestart(t *testing.T) {
 // credentials fail, and a registration cannot be minted or claimed by naming
 // an id.
 func TestSuppliedIDAuthorizesNothing(t *testing.T) {
-	s := newPenneStore("")
+	s := newPenneStore()
 	if _, err := s.CheckAssoc("p0123456789abcdef0123456789abcdef", "whatever", time.Now()); err == nil {
 		t.Fatal("unknown id+password accepted")
 	}
@@ -59,7 +58,7 @@ func TestSuppliedIDAuthorizesNothing(t *testing.T) {
 }
 
 func TestTicketExpiryRevocationAndWrongDevice(t *testing.T) {
-	s := newPenneStore("")
+	s := newPenneStore()
 	id, pw := s.Register("dev1", "user1", "", time.Now())
 
 	_, expired, err := s.IssueTicket(id, pw, time.Now().Add(-2*time.Hour), time.Hour)
@@ -88,7 +87,7 @@ func TestTicketExpiryRevocationAndWrongDevice(t *testing.T) {
 }
 
 func TestSubmitIsIdempotentByEventID(t *testing.T) {
-	s := newPenneStore("")
+	s := newPenneStore()
 	now := time.Now()
 	d := PenneDelivery{ID: "ev1", UserID: "u1", Kind: EventFriendRequestReceived, Payload: map[string]any{}}
 	if r := s.Submit(d, now); !r.Accepted {
@@ -103,7 +102,7 @@ func TestSubmitIsIdempotentByEventID(t *testing.T) {
 }
 
 func TestPresenceUpdatesCoalescePerFriend(t *testing.T) {
-	s := newPenneStore("")
+	s := newPenneStore()
 	now := time.Now()
 	for i, state := range []string{"ONLINE", "PLAYING", "OFFLINE"} {
 		if r := s.Submit(PenneDelivery{
@@ -132,7 +131,7 @@ func TestPresenceUpdatesCoalescePerFriend(t *testing.T) {
 }
 
 func TestQueueOverflowPolicy(t *testing.T) {
-	s := newPenneStore("")
+	s := newPenneStore()
 	now := time.Now()
 	// Fill the queue with social events, which never coalesce.
 	for i := 0; i < maxPendingPerUser; i++ {
@@ -159,7 +158,7 @@ func TestQueueOverflowPolicy(t *testing.T) {
 }
 
 func TestRetryBackoffAndExpiry(t *testing.T) {
-	s := newPenneStore("")
+	s := newPenneStore()
 	now := time.Now()
 	s.Submit(PenneDelivery{ID: "ev1", UserID: "u1", Kind: EventFriendRequestReceived}, now)
 
@@ -186,7 +185,7 @@ func TestRetryBackoffAndExpiry(t *testing.T) {
 }
 
 func TestDeliveredRetentionDeduplicatesReplays(t *testing.T) {
-	s := newPenneStore("")
+	s := newPenneStore()
 	now := time.Now()
 	s.Submit(PenneDelivery{ID: "ev1", UserID: "u1", Kind: EventFriendDeleted}, now)
 	s.MarkDelivered("u1", "ev1", now)
@@ -204,7 +203,7 @@ func TestDeliveredRetentionDeduplicatesReplays(t *testing.T) {
 }
 
 func TestSweepExpiresAndPrunes(t *testing.T) {
-	s := newPenneStore("")
+	s := newPenneStore()
 	now := time.Now()
 	s.Submit(PenneDelivery{ID: "ev-old", UserID: "u1", Kind: EventFriendRequestReceived}, now.Add(-time.Hour))
 	s.d.Outbox["u1"][0].ExpiresAt = now.Add(-time.Second).Unix()
@@ -233,7 +232,7 @@ func TestSweepExpiresAndPrunes(t *testing.T) {
 
 func TestTicketDenialRecordsSurviveSweep(t *testing.T) {
 	// Expired tickets stay a week for denial audits; older ones are purged.
-	s := newPenneStore("")
+	s := newPenneStore()
 	id, pw := s.Register("dev1", "user1", "", time.Now())
 	_, recent, err := s.IssueTicket(id, pw, time.Now().Add(-3*24*time.Hour), time.Hour)
 	if err != nil {
@@ -253,11 +252,11 @@ func TestTicketDenialRecordsSurviveSweep(t *testing.T) {
 }
 
 func TestPushChannelsAndLinksPersist(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "penne.json")
-	s := newPenneStore(path)
+	dsn := testDSN(t)
+	s := testPenneStore(t, dsn, "")
 	s.RecordPushChannel("user1", "devacct1", "npns", "tok123", time.Now())
 	s.LinkNSA(func() string { id, _ := s.Register("dev1", "user1", "", time.Now()); return id }(), "nsa1", time.Now())
-	reloaded := newPenneStore(path)
+	reloaded := testPenneStore(t, dsn, "")
 	if reloaded.d.PushChannels["user1/npns"] == nil || reloaded.d.PushChannels["user1/npns"].DeviceTok != "tok123" {
 		t.Fatal("push channel not persisted")
 	}

@@ -22,13 +22,10 @@ Environment=NX_API_ADDR=:20070
 Environment=NX_DATA=/app/data
 Environment=NX_CA_DIR=/ca
 Environment=BAAS_SIGNING_KEY=/keys/baas_signing_key.pem
-# First start only: with no /app/data/penne.json yet, nx-baas's file is imported as it
-# stood (registrations, tickets, outbox). Read-only, and only read then; drop the mount
-# once nx-penne has its own file. The directory, not the file: nx-baas saves by rename, and
-# a bind mount of a single file keeps showing the inode it was created with.
-Environment=NX_PENNE_IMPORT=/import/penne.json
+# Postgres is the store: NX_PENNE_DATABASE_URL comes from the shared env file (required). On the
+# first start against an empty database /app/data/penne.json, if present, is imported once and
+# left in place.
 Volume=openpak-nx-penne-data:/app/data
-Volume=<nx-baas data dir on the host>:/import:ro
 Volume=%h/openpak/deploy/ca:/ca:ro
 Volume=<the host dir nx-baas mounts at /keys>:/keys:ro
 
