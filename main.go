@@ -29,6 +29,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/openpak/nx-common/httplog"
 	"github.com/openpak/nx-common/nxapi"
 	"github.com/openpak/nx-common/nxjwt"
 	"github.com/openpak/nx-common/nxtls"
@@ -67,8 +68,12 @@ var debug = os.Getenv("NX_DEBUG") != ""
 
 // ServeHTTP answers Penne's hosts; any other host is misrouted and says so with a 421.
 func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	httplog.Wrap(logPrefix, httplog.Options{Path: redact.Path, UserAgent: redact.IDs}, http.HandlerFunc(s.serve)).ServeHTTP(w, r)
+}
+
+// serve is ServeHTTP's body; ServeHTTP adds the access line (status, duration, never the query).
+func (s *server) serve(w http.ResponseWriter, r *http.Request) {
 	host := hostOf(r)
-	log.Printf("%s %s %s%s ua=%q", logPrefix, r.Method, host, redact.URL(r.URL), redact.IDs(r.UserAgent()))
 	if r.URL.Path == "/healthz" {
 		writeJSON(w, 200, map[string]any{"status": "ok", "service": "nx-penne"})
 		return

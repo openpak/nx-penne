@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/openpak/nx-common/httplog"
 	"github.com/openpak/nx-common/internalkey"
 	"github.com/openpak/nx-common/nxhttp"
 
@@ -30,7 +31,7 @@ func (s *server) internalAPI() http.Handler {
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"status": "ok", "service": "nx-penne"})
 	})
-	return nxhttp.SplitListener(s, mux)
+	return nxhttp.SplitListener(s, httplog.Wrap(logPrefix, httplog.Options{Path: redact.Path, UserAgent: redact.IDs}, mux))
 }
 
 func (s *server) penneAPI(w http.ResponseWriter, r *http.Request) {
