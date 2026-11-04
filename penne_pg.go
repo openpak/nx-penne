@@ -129,8 +129,10 @@ func (d *penneData) fill() {
 }
 
 // persist upserts the document; mu is held.
-func (s *penneStore) persist() error {
-	b, err := json.Marshal(s.d)
+func (s *penneStore) persist() error { return s.persistData(s.d) }
+
+func (s *penneStore) persistData(d *penneData) error {
+	b, err := json.Marshal(d)
 	if err != nil {
 		return err
 	}

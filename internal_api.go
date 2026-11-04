@@ -28,6 +28,7 @@ import (
 func (s *server) internalAPI() http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("/internal/penne/", internalkey.Guard(http.HandlerFunc(s.penneAPI)))
+	mux.HandleFunc("DELETE /internal/accounts/{account_id}/data", s.eraseHandler) // Bearer ACCOUNT_ERASE_KEY, own check
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"status": "ok", "service": "nx-penne"})
 	})

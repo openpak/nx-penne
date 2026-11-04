@@ -44,3 +44,7 @@ does before it submits); news, parental-control and ban deliveries live in
 `internal_api.go`.
 
 The split itself (internal API, cut-over and rollback runbook) is in nx-baas `docs/service-split.md`.
+
+## Account erasure (card #120)
+
+`DELETE http://openpak-nx-penne:20070/internal/accounts/{account_id}/data`, `Authorization: Bearer <ACCOUNT_ERASE_KEY>` (shared key in the env file; unset = 503). Needs nx-baas reachable (`NX_CORE_URL`) to map the account to its BAAS user id; call it before the core finalises the deletion. Removes the account's registrations, tokens, tickets, subscriptions, push channels, queued and delivered-event records from `penne_state`. Idempotent.
